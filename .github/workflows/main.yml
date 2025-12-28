@@ -5,15 +5,16 @@ jobs:
   release:
     strategy:
       matrix:
+        # 建议先跑 windows 测试，如果 mac 依然报错（通常因为签名），可以先去掉 macos-latest
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # 升级到 v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4 # 升级到 v4
         with:
           node-version: 18
 
@@ -25,7 +26,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Finished App
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4 # 核心修复点：升级到 v4
         with:
-          name: App-${{ matrix.os }}
-          path: dist/*.exe, dist/*.dmg, dist/*.zip
+          # v4 要求每个操作系统的 artifact 名字必须唯一，所以加了 matrix.os
+          name: App-Package-${{ matrix.os }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
