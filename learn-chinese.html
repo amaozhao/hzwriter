@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>汉字学习乐园 (全功能最终版)</title>
+    <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
+    <script src="https://unpkg.com/pinyin-pro"></script>
+    <script src="chars.js" defer></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; display: flex; justify-content: center; align-items: center; flex-direction: column; min-height: 100vh; background-color: #f0f2f5; color: #333; margin: 0; padding: 20px 0; }
+        .container { text-align: center; background: white; padding: 30px 40px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1); width: 90%; max-width: 700px; }
+        h1 { color: #d9534f; margin-bottom: 20px; }
+        #pinyin-display { font-size: 2.8em; color: #555; margin-bottom: 5px; height: 60px; line-height: 60px; font-family: 'Helvetica Neue', Arial, sans-serif; }
+        #character-target { width: 300px; height: 300px; margin: 10px auto; border: 2px solid #ddd; border-radius: 8px; position: relative; }
+        .tian-zi-ge::before, .tian-zi-ge::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #fcdede; }
+        .tian-zi-ge::before { width: 100%; height: 1px; }
+        .tian-zi-ge::after { width: 1px; height: 100%; }
+        .controls, .input-area { margin-top: 20px; }
+        .input-area { display: flex; justify-content: center; align-items: center; gap: 10px; }
+        button { background-color: #5cb85c; color: white; border: none; padding: 12px 25px; border-radius: 8px; font-size: 16px; margin: 5px; cursor: pointer; transition: background-color 0.3s; }
+        button#random-char-btn { background-color: #337ab7; }
+        button#random-char-btn:hover { background-color: #286090; }
+        button#animate-btn { background-color: #5bc0de; }
+        button#animate-btn:hover { background-color: #46b8da; }
+        button#quiz-btn { background-color: #5cb85c; }
+        button#quiz-btn:hover { background-color: #4cae4c; }
+        button#reset-btn { background-color: #f0ad4e; }
+        button#reset-btn:hover { background-color: #ec971f; }
+        input[type="text"] { padding: 10px; font-size: 18px; width: 80px; text-align: center; border: 2px solid #ccc; border-radius: 8px; }
+        .fanning-container, .details-container { margin-top: 30px; text-align: left; width: 100%; border-top: 1px solid #eee; padding-top: 20px; }
+        .details-container h3 { margin-bottom: 15px; color: #4a4a4a; font-weight: 500; text-align: center; }
+        #fanning-strokes-target { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+        #fanning-strokes-target svg { width: 60px; height: 60px; border: 1px solid #eee; background-color: #fff; border-radius: 4px; }
+        #definition-target, #idiom-target { display: none; }
+        #definition-target .def-item { padding: 10px; border-bottom: 1px solid #f0f0f0; }
+        #definition-target .def-item:last-child { border-bottom: none; }
+        #definition-target .def-item p { margin: 5px 0; line-height: 1.7; color: #333; }
+        #idiom-target .idiom-list { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+        #idiom-target .idiom-item { background-color: #e9f5ff; color: #286090; padding: 6px 14px; border-radius: 16px; font-size: 1.1em; }
+        .info-text, .loading-text, .error-text { color: #999; text-align: center; padding: 10px; }
+        .error-text { color: #d9534f; }
+        #definition-title.active, #idiom-title.active { color: #28a745; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>汉字学习乐园</h1>
+        <p>在下面的方框里输入汉字，或点击“随机换字”！</p>
+        <div class="input-area">
+            <input type="text" id="char-input" value="永" maxlength="1">
+            <button id="random-char-btn">随机换字</button>
+        </div>
+        <div id="pinyin-display"></div>
+        <div id="character-target"></div>
+        <div class="controls">
+            <button id="animate-btn">循环演示</button>
+            <button id="quiz-btn">开始练习</button>
+            <button id="reset-btn">重置</button>
+        </div>
+        <div class="fanning-container">
+            <h3>笔顺分解图</h3>
+            <div id="fanning-strokes-target"></div>
+        </div>
+        <div class="details-container">
+            <h3 id="definition-title" style="cursor: pointer;">字义解析 (点击加载)</h3>
+            <div id="definition-target"></div>
+        </div>
+        <div class="details-container">
+            <h3 id="idiom-title" style="cursor: pointer;">相关成语 (点击加载)</h3>
+            <div id="idiom-target"></div>
+        </div>
+    </div>
+    <script>
+        var writer = null;
+        var characterTargetDiv = document.getElementById('character-target');
+        var charInput = document.getElementById('char-input');
+        
+        function renderFanningStrokes(target, strokes) { var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); target.appendChild(svg); var group = document.createElementNS('http://www.w3.org/2000/svg', 'g'); var transformData = HanziWriter.getScalingTransform(60, 60, 5); group.setAttributeNS(null, 'transform', transformData.transform); svg.appendChild(group); strokes.forEach(function(strokePath) { var path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttributeNS(null, 'd', strokePath); path.style.fill = '#555'; group.appendChild(path); }); }
+        function displayStrokeSequence(char) { var target = document.getElementById('fanning-strokes-target'); target.innerHTML = ''; HanziWriter.loadCharacterData(char).then(function(charData) { for (var i = 0; i < charData.strokes.length; i++) { var strokesPortion = charData.strokes.slice(0, i + 1); renderFanningStrokes(target, strokesPortion); } }).catch(function(err){ console.error('无法加载汉字笔顺数据:', err); target.innerHTML = '<p class="info-text">此为生僻字，暂无笔顺数据。</p>'; }); }
+
+        let isDictionaryLoaded = false, isDefinitionVisible = false;
+        let isIdiomDictLoaded = false, isIdiomVisible = false;
+
+        function showDefinitions(char) {
+            const defTarget = document.getElementById('definition-target');
+            defTarget.innerHTML = '';
+            if (typeof HANZI_DICTIONARY === 'undefined' || !HANZI_DICTIONARY[char]) {
+                defTarget.innerHTML = '<p class="info-text">暂未收录该字的释义。</p>';
+                return;
+            }
+            const details = HANZI_DICTIONARY[char];
+            if (details.definitions && details.definitions.length > 0) {
+                details.definitions.forEach(defText => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'def-item';
+                    const pDef = document.createElement('p');
+                    pDef.textContent = defText;
+                    itemDiv.appendChild(pDef);
+                    defTarget.appendChild(itemDiv);
+                });
+            } else {
+                defTarget.innerHTML = '<p class="info-text">暂未收录该字的释义。</p>';
+            }
+        }
+        
+        function showIdioms(char) {
+            const idiomTarget = document.getElementById('idiom-target');
+            idiomTarget.innerHTML = '';
+            if (typeof IDIOM_DICTIONARY === 'undefined' || !IDIOM_DICTIONARY[char]) {
+                idiomTarget.innerHTML = '<p class="info-text">暂未收录含该字的成语。</p>';
+                return;
+            }
+            const idioms = IDIOM_DICTIONARY[char];
+            const idiomList = document.createElement('div');
+            idiomList.className = 'idiom-list';
+            idioms.forEach(idiomWord => {
+                const span = document.createElement('span');
+                span.className = 'idiom-item';
+                span.textContent = idiomWord;
+                idiomList.appendChild(span);
+            });
+            idiomTarget.appendChild(idiomList);
+        }
+
+        document.getElementById('definition-title').addEventListener('click', function() {
+            const title = this;
+            const defTarget = document.getElementById('definition-target');
+            const currentChar = charInput.value;
+            if (!isDictionaryLoaded) {
+                title.textContent = '正在加载字典...';
+                defTarget.style.display = 'block';
+                defTarget.innerHTML = '<p class="loading-text">首次加载，请稍候...</p>';
+                const script = document.createElement('script');
+                script.src = 'detail.js';
+                script.onload = () => {
+                    isDictionaryLoaded = true;
+                    isDefinitionVisible = true;
+                    title.textContent = '字义解析 (点击收起)';
+                    title.classList.add('active');
+                    showDefinitions(currentChar);
+                };
+                script.onerror = () => { title.textContent = '字义解析 (加载失败)'; defTarget.innerHTML = '<p class="error-text">字典文件加载失败！</p>'; };
+                document.head.appendChild(script);
+                return;
+            }
+            if (isDefinitionVisible) {
+                defTarget.style.display = 'none';
+                title.textContent = '字义解析 (点击展开)';
+                title.classList.remove('active');
+                isDefinitionVisible = false;
+            } else {
+                showDefinitions(currentChar);
+                defTarget.style.display = 'block';
+                title.textContent = '字义解析 (点击收起)';
+                title.classList.add('active');
+                isDefinitionVisible = true;
+            }
+        });
+
+        document.getElementById('idiom-title').addEventListener('click', function() {
+            const title = this;
+            const idiomTarget = document.getElementById('idiom-target');
+            const currentChar = charInput.value;
+            if (!isIdiomDictLoaded) {
+                title.textContent = '正在加载成语库...';
+                idiomTarget.style.display = 'block';
+                idiomTarget.innerHTML = '<p class="loading-text">首次加载，请稍候...</p>';
+                const script = document.createElement('script');
+                script.src = 'idiom.js';
+                script.onload = () => {
+                    isIdiomDictLoaded = true;
+                    isIdiomVisible = true;
+                    title.textContent = '相关成语 (点击收起)';
+                    title.classList.add('active');
+                    showIdioms(currentChar);
+                };
+                script.onerror = () => { title.textContent = '相关成语 (加载失败)'; idiomTarget.innerHTML = '<p class="error-text">成语库加载失败！</p>'; };
+                document.head.appendChild(script);
+                return;
+            }
+            if (isIdiomVisible) {
+                idiomTarget.style.display = 'none';
+                title.textContent = '相关成语 (点击展开)';
+                title.classList.remove('active');
+                isIdiomVisible = false;
+            } else {
+                showIdioms(currentChar);
+                idiomTarget.style.display = 'block';
+                title.textContent = '相关成语 (点击收起)';
+                title.classList.add('active');
+                isIdiomVisible = true;
+            }
+        });
+        
+        function updateCharacter(char) {
+            if (!char || char.trim().length !== 1) { return; }
+            charInput.value = char;
+            const pinyinDisplay = document.getElementById('pinyin-display');
+            if (window.pinyinPro) { pinyinDisplay.innerText = pinyinPro.pinyin(char, { toneType: 'symbol' }); }
+            characterTargetDiv.innerHTML = '';
+            writer = HanziWriter.create('character-target', char, {
+                width: 300, height: 300, padding: 20, showOutline: true,
+                showCharacter: false, strokeAnimationSpeed: 0.5, delayBetweenStrokes: 200,
+                delayBetweenLoops: 1500, drawingWidth: 40, showHintAfterMisses: 1,
+                highlightOnComplete: true,
+            });
+            characterTargetDiv.classList.add('tian-zi-ge');
+            writer.loopCharacterAnimation();
+            displayStrokeSequence(char);
+            
+            const defTitle = document.getElementById('definition-title');
+            const defTarget = document.getElementById('definition-target');
+            defTarget.style.display = 'none';
+            defTitle.classList.remove('active');
+            isDefinitionVisible = false;
+            defTitle.textContent = isDictionaryLoaded ? '字义解析 (点击展开)' : '字义解析 (点击加载)';
+            
+            const idiomTitle = document.getElementById('idiom-title');
+            const idiomTarget = document.getElementById('idiom-target');
+            idiomTarget.style.display = 'none';
+            idiomTitle.classList.remove('active');
+            isIdiomVisible = false;
+            idiomTitle.textContent = isIdiomDictLoaded ? '相关成语 (点击展开)' : '相关成语 (点击加载)';
+        }
+
+        charInput.addEventListener('input', function() { setTimeout(() => { updateCharacter(this.value); }, 100); });
+        document.getElementById('animate-btn').addEventListener('click', () => writer && writer.loopCharacterAnimation());
+        document.getElementById('quiz-btn').addEventListener('click', () => writer && writer.quiz());
+        document.getElementById('reset-btn').addEventListener('click', () => updateCharacter(charInput.value));
+        document.getElementById('random-char-btn').addEventListener('click', () => {
+            let newChar;
+            if (typeof COMMON_CHARS === 'undefined') { alert('常用字库正在加载，请稍候...'); return; }
+            do {
+                const randomIndex = Math.floor(Math.random() * COMMON_CHARS.length);
+                newChar = COMMON_CHARS[randomIndex];
+            } while (newChar === charInput.value);
+            updateCharacter(newChar);
+        });
+
+        window.onload = () => {
+            setTimeout(() => {
+                if (typeof COMMON_CHARS !== 'undefined') {
+                    updateCharacter('永');
+                } else {
+                    document.getElementById('pinyin-display').innerText = '正在加载数据，请稍候...';
+                    setTimeout(() => updateCharacter('永'), 2000);
+                }
+            }, 200); 
+        };
+    </script>
+</body>
+</html>
