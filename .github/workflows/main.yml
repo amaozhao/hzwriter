@@ -1,0 +1,31 @@
+name: Build Desktop Apps
+on: [push]
+
+jobs:
+  release:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install and Build
+        run: |
+          npm install
+          npm run build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Finished App
+        uses: actions/upload-artifact@v3
+        with:
+          name: App-${{ matrix.os }}
+          path: dist/*.exe, dist/*.dmg, dist/*.zip
